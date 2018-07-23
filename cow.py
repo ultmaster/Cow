@@ -17,7 +17,7 @@ from colorama import Fore
 from colorama import Style
 
 CONFIG = {
-    "cpp": ("{name}.cpp", "g++-7 -o {name} {name}.cpp", "./{name}", "{name}"),
+    "cpp": ("{name}.cpp", "g++-7 -o {name} -O2 -Dzerol -Dultmaster {name}.cpp", "./{name}", "{name}"),
     "py": ("{name}.py", "", "python3 {name}.py", ""),
 }
 
@@ -32,11 +32,13 @@ def parse_samples(file):
     with open(file) as sample_file_handler:
         lst = re.split(r"%{2,}\n", sample_file_handler.read())
     for i in range(0, len(lst), 2):
-        samples.append((lst[i].strip(), lst[i + 1].strip()))
+        try:
+            samples.append((lst[i].strip(), lst[i + 1].strip()))
+        except: pass
     return samples
 
 
-def check(command, test_input, test_output, time_limit, output_limit):
+def check(command, test_input, test_output, time_limit, output_limit, ignore_runtime_error=False):
     in_file = "/tmp/std_input"
     stderr_file = "/tmp/std_err"
     try:
@@ -53,16 +55,25 @@ def check(command, test_input, test_output, time_limit, output_limit):
                 print("OK, time = %.3fs" % time_elapsed)
                 return True
             print("Unexpected Output")
+            print(Fore.YELLOW + "Input:\n" + test_input)
             print(Fore.GREEN + "Expected:\n" + test_output)
             print(Fore.RED + "Found:\n" + output)
             print(Style.RESET_ALL, end='')
             return False
+    except subprocess.CalledProcessError:
+        if ignore_runtime_error:
+            with open(stderr_file, encoding='ascii') as f:
+                print("Error info:")
+                print(f.read().strip())
+                print(Style.RESET_ALL)
+            return False
+        raise
     except Exception as e:
         print("Exception found:", repr(e))
         traceback.print_exc()
         with open(stderr_file) as f:
-            print("Stderr info:")
-            print(f.read(4096).strip() + "\n========")
+            print(Fore.RED + "Stderr info:")
+            print(f.read(4096).strip() + "\n========" + Style.RESET_ALL)
         return False
 
 
@@ -119,7 +130,18 @@ if __name__ == "__main__":
     correct = 0
     for idx, (sample_in, sample_out) in enumerate(samples, start=1):
         print("Test %d... " % idx, end='')
-        if check(executer, sample_in, sample_out, args.time_limit, args.output_limit):
-            correct += 1
+        try:
+            if check(executer, sample_in, sample_out, args.time_limit, args.output_limit):
+                correct += 1
+        except:
+            print("Fatal Error!")
+            if compiler.startswith("g++"):
+                compiler = "g++-7 -m32 -g -fno-inline -fno-omit-frame-pointer {name}.cpp -o {name}".format(name=args.name)
+                print(Fore.YELLOW + "Running:", compiler)
+                print("Running Dr. Memory...")
+                subprocess.run(compiler, shell=True, check=True)
+                check("drmemory -- ./{name}".format(name=args.name), sample_in, sample_out, args.time_limit * 10,
+                      args.output_limit, ignore_runtime_error=True)
+                break
     print("------------------------")
     print("%d out of %d tests passed." % (correct, len(samples)))
