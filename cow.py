@@ -17,7 +17,7 @@ from colorama import Fore
 from colorama import Style
 
 CONFIG = {
-    "cpp": ("{name}.cpp", "g++-7 -o {name} -O2 -Dzerol -Dultmaster {name}.cpp", "./{name}", "{name}"),
+    "cpp": ("{name}.cpp", "g++-7 -std=c++17 -o {name} -O2 -Dzerol -Dultmaster -fmax-errors=3 {name}.cpp", "./{name}", "{name}"),
     "py": ("{name}.py", "", "python3 {name}.py", ""),
 }
 
@@ -64,8 +64,7 @@ def check(command, test_input, test_output, time_limit, output_limit, ignore_run
         if ignore_runtime_error:
             with open(stderr_file, encoding='ascii') as f:
                 print("Error info:")
-                print(f.read().strip())
-                print(Style.RESET_ALL)
+                print(f.read().strip() + Style.RESET_ALL)
             return False
         raise
     except Exception as e:
@@ -88,6 +87,8 @@ if __name__ == "__main__":
                         help='Set the output limit (by kilobytes)')
     parser.add_argument('--sample-combine', dest="sample_combine", type=str, default='none',
                         help='Sample combination policy. Available choices are: shuffle, ordered, none')
+    parser.add_argument('--check', dest='online_judge', default=False, const=True, action='store_const',
+                        help='Enable online judge mode')
 
     args = parser.parse_args()
 
@@ -100,6 +101,9 @@ if __name__ == "__main__":
             compiler = c.format(name=args.name)
             executer = e.format(name=args.name)
             dest = d.format(name=args.name)
+
+    if args.online_judge:
+        compiler = compiler.replace('-Dzerol -Dultmaster', '-DONLINE_JUDGE')
 
     if not filename:
         raise FileNotFoundError("Source file not found")
@@ -136,12 +140,11 @@ if __name__ == "__main__":
         except:
             print("Fatal Error!")
             if compiler.startswith("g++"):
-                compiler = "g++-7 -m32 -g -fno-inline -fno-omit-frame-pointer {name}.cpp -o {name}".format(name=args.name)
+                compiler = "g++-7 -g {name}.cpp -o {name}".format(name=args.name)
                 print(Fore.YELLOW + "Running:", compiler)
-                print("Running Dr. Memory...")
+                print("Compiling with debug option")
                 subprocess.run(compiler, shell=True, check=True)
-                check("drmemory -- ./{name}".format(name=args.name), sample_in, sample_out, args.time_limit * 10,
-                      args.output_limit, ignore_runtime_error=True)
+                check(executer, sample_in, sample_out, args.time_limit, args.output_limit, ignore_runtime_error=True)
                 break
     print("------------------------")
     print("%d out of %d tests passed." % (correct, len(samples)))
