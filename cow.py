@@ -105,6 +105,7 @@ if __name__ == "__main__":
                         help='Enable debug mode')
     parser.add_argument('--case-num', dest='case_number', default=False, const=True, action='store_const',
                         help='Add test case number in front of input')
+    parser.add_argument('--test', dest='test', type=int, default=0, help='Set specific test (default is 0, all)')
 
     args = parser.parse_args()
 
@@ -136,6 +137,9 @@ if __name__ == "__main__":
         raise FileNotFoundError("Sample file not found")
 
     samples = parse_samples(sample_file)
+    if args.test:
+        samples = [samples[args.test - 1]]
+
     if args.sample_combine == "shuffle":
         random.shuffle(samples)
     if args.sample_combine in ["ordered", "shuffle"]:
